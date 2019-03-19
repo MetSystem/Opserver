@@ -19,8 +19,10 @@ namespace StackExchange.Opserver.Data.Redis
 
         public RedisConnectionInfo ConnectionInfo { get; internal set; }
         public string Name => ConnectionInfo.Name;
-        public string Host => ConnectionInfo.Host;
+        public RedisHost Host => ConnectionInfo.Server;
+        public string ReplicationGroup => ConnectionInfo.Server.ReplicationGroupName;
         public string ShortHost { get; internal set; }
+        public bool ReplicatesCrossRegion { get; }
 
         public Version Version => Info.Data?.Server.Version;
 
@@ -75,7 +77,10 @@ namespace StackExchange.Opserver.Data.Redis
                 yield return MonitorStatus.Unknown;
                 yield break;
             }
-            if (Role == RedisInfo.RedisInstanceRole.Unknown) yield return MonitorStatus.Critical;
+            if (Role == RedisInfo.RedisInstanceRole.Unknown)
+            {
+                yield return Info.LastPollSuccessful ? MonitorStatus.Critical : MonitorStatus.Warning;
+            }
             if (!Info.LastPollSuccessful) yield return MonitorStatus.Warning;
             if (Replication == null)
             {
@@ -98,13 +103,13 @@ namespace StackExchange.Opserver.Data.Redis
         public RedisInstance(RedisConnectionInfo connectionInfo) : base(connectionInfo.Host + ":" + connectionInfo.Port.ToString())
         {
             ConnectionInfo = connectionInfo;
-            ShortHost = Host.Split(StringSplits.Period)[0];
+            ShortHost = connectionInfo.Host.Split(StringSplits.Period)[0];
+            ReplicatesCrossRegion = Current.Settings.Redis.Replication?.CrossRegionNameRegex?.IsMatch(ConnectionInfo.Name) ?? true;
         }
 
         public string GetServerName(string hostOrIp)
         {
-            IPAddress addr;
-            if (Current.Settings.Dashboard.Enabled && IPAddress.TryParse(hostOrIp, out addr))
+            if (Current.Settings.Dashboard.Enabled && IPAddress.TryParse(hostOrIp, out IPAddress addr))
             {
                 var nodes = DashboardModule.GetNodesByIP(addr).ToList();
                 if (nodes.Count == 1) return nodes[0].PrettyName;
@@ -117,18 +122,18 @@ namespace StackExchange.Opserver.Data.Redis
         // We're not doing a lot of redis access, so tone down the thread count to 1 socket queue handler
         public static readonly SocketManager SharedSocketManager = new SocketManager("Opserver Shared");
 
-        private ConnectionMultiplexer GetConnection(bool allowAdmin = false, int syncTimeout = 10000)
+        private ConnectionMultiplexer GetConnection(bool allowAdmin = false, int syncTimeout = 60000)
         {
             var config = new ConfigurationOptions
             {
                 SyncTimeout = syncTimeout,
-                ConnectTimeout = 20000,
+                ConnectTimeout = 60000,
                 AllowAdmin = allowAdmin,
                 Password = Password,
                 Ssl=UseSsl,
                 EndPoints =
                 {
-                    { Host, Port }
+                    { ConnectionInfo.Host, ConnectionInfo.Port }
                 },
                 ClientName = "Opserver",
                 SocketManager = SharedSocketManager
@@ -148,7 +153,7 @@ namespace StackExchange.Opserver.Data.Redis
                 cacheDuration,
                 get,
                 addExceptionData: e => e.AddLoggedData("Server", Name)
-                                        .AddLoggedData("Host", Host)
+                                        .AddLoggedData("Host", ConnectionInfo.Host)
                                         .AddLoggedData("Port", Port.ToString()),
                 timeoutMs: 10000,
                 memberName: memberName,

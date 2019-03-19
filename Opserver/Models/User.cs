@@ -9,29 +9,24 @@ namespace StackExchange.Opserver.Models
     {
         public IIdentity Identity { get; }
 
-        public string AccountName { get; private set; }
+        public string AccountName { get; }
         public bool IsAnonymous { get; }
 
         public User(IIdentity identity)
         {
             Identity = identity;
-            var i = identity as FormsIdentity;
-            if (i == null)
+            if (Identity == null)
             {
                 IsAnonymous = true;
                 return;
             }
 
-            IsAnonymous = !i.IsAuthenticated;
-            if (i.IsAuthenticated)
-                AccountName = i.Name;
+            IsAnonymous = !Identity.IsAuthenticated;
+            if (Identity.IsAuthenticated)
+                AccountName = Identity.Name;
         }
 
-        public bool IsInRole(string role)
-        {
-            Roles r;
-            return Enum.TryParse(role, out r) && Current.IsInRole(r);
-        }
+        public bool IsInRole(string role) => Enum.TryParse(role, out Roles r) && Current.IsInRole(r);
 
         private Roles? _role;
         public Roles? RawRoles => _role;

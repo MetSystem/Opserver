@@ -7,6 +7,7 @@ namespace StackExchange.Opserver.Data.SQL
     public partial class SQLCluster : IEquatable<SQLCluster>, IMonitedService
     {
         public string Name => Settings.Name;
+        public string Description => Settings.Description;
         public TimeSpan RefreshInterval { get; }
         private SQLSettings.Cluster Settings { get; }
 
@@ -19,7 +20,7 @@ namespace StackExchange.Opserver.Data.SQL
 
         public IEnumerable<SQLNode.AGInfo> GetAvailabilityGroups(string node, string agName)
         {
-            Func<SQLNode.AGInfo, bool> agMatch = ag => agName.IsNullOrEmpty() || ag.Name == agName;
+            bool agMatch(SQLNode.AGInfo ag) => agName.IsNullOrEmpty() || ag.Name == agName;
 
             return (node.HasValue()
                 ? Nodes.Where(n => string.Equals(n.Name, node))

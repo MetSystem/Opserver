@@ -8,8 +8,8 @@ namespace StackExchange.Opserver.Data.Elastic
     {
         private Cache<ClusterStateInfo> _state;
 
-        public Cache<ClusterStateInfo> State => _state ?? (_state = GetElasticCache(async () =>
-                await GetAsync<ClusterStateInfo>("_cluster/state/version,master_node,nodes,routing_table,routing_nodes/").ConfigureAwait(false))
+        public Cache<ClusterStateInfo> State => _state ?? (_state = GetElasticCache(
+            () => GetAsync<ClusterStateInfo>("_cluster/state/version,master_node,nodes,routing_table,routing_nodes/"))
         );
 
         public NodeInfo MasterNode => Nodes.Data?.Nodes?.FirstOrDefault(n => State?.Data?.MasterNode == n.GUID);
@@ -20,19 +20,10 @@ namespace StackExchange.Opserver.Data.Elastic
         public class ClusterStateInfo : IMonitorStatus
         {
             private MonitorStatus? _monitorStatus;
-            public MonitorStatus MonitorStatus
-            {
-                get
-                {
-                    if (!_monitorStatus.HasValue)
-                    {
-                        _monitorStatus = RoutingNodes?.Nodes.Values.SelectMany(n => n)
-                            .Union(RoutingNodes.Unassigned)
-                            .GetWorstStatus() ?? MonitorStatus.Unknown;
-                    }
-                    return _monitorStatus.Value;
-                }
-            }
+            public MonitorStatus MonitorStatus =>
+                _monitorStatus ?? (_monitorStatus = RoutingNodes?.Nodes.Values.SelectMany(n => n)
+                    .Union(RoutingNodes.Unassigned)
+                    .GetWorstStatus() ?? MonitorStatus.Unknown).Value;
             // TODO: Implement
             public string MonitorStatusReason => null;
 

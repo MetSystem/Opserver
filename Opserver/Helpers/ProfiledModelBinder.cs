@@ -13,7 +13,7 @@ namespace StackExchange.Opserver.Helpers
             string name = prof == null ? null : "BindModel:" + bindingContext.ModelName;
             using (prof.Step(name))
             {
-                Type modelType = bindingContext.ModelType;
+                var modelType = bindingContext.ModelType;
                 if (modelType == formCollectionType || bindingContext.ModelMetadata.IsComplexType)
                 {
                     return base.BindModel(controllerContext, bindingContext);
@@ -21,21 +21,21 @@ namespace StackExchange.Opserver.Helpers
 
                 try
                 {
-                    ValueProviderResult valueProviderResult = bindingContext.ValueProvider.GetValue(bindingContext.ModelName);
+                    var valueProviderResult = bindingContext.ValueProvider.GetValue(bindingContext.ModelName);
                     object result = valueProviderResult?.RawValue;
                     if (result == null) return null;
-                    var arr = result as Array;
 
-                    if (arr != null && !modelType.IsArray && arr.Length == 1)
+                    if (result is Array arr && !modelType.IsArray && arr.Length == 1)
                     {
                         result = arr.GetValue(0);
                     }
                     if (result == null || result.GetType() == modelType)
+                    {
                         return result;
+                    }
 
                     var underlyingType = Nullable.GetUnderlyingType(modelType) ?? modelType;
-                    var s = result as string;
-                    if (s != null)
+                    if (result is string s)
                     {
                         try
                         {
@@ -53,8 +53,7 @@ namespace StackExchange.Opserver.Helpers
                         }
                         catch { /* best attempt only */ }
                     }
-                    result = Convert.ChangeType(result, underlyingType, valueProviderResult.Culture);
-                    return result;
+                    return Convert.ChangeType(result, underlyingType, valueProviderResult.Culture);
                 }
                 catch
                 {

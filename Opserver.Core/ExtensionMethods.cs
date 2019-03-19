@@ -1,18 +1,16 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Net;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using StackExchange.Opserver.Data;
 using StackExchange.Opserver.Helpers;
-using StackExchange.Profiling;
 using StackExchange.Redis;
+using System.Text;
 
 namespace StackExchange.Opserver
 {
@@ -21,7 +19,7 @@ namespace StackExchange.Opserver
     /// </summary>
     public static partial class ExtensionMethods
     {
-        public static readonly string ExceptionLogPrefix = "ErrorLog-";
+        public const string ExceptionLogPrefix = "ErrorLog-";
 
         /// <summary>
         /// Answers true if this String is either null or empty.
@@ -65,6 +63,12 @@ namespace StackExchange.Opserver
         /// </summary>
         /// <param name="s">The string to encode, to put in URLs</param>
         public static string UrlEncode(this string s) => s.HasValue() ? WebUtility.UrlEncode(s) : s;
+
+        /// <summary>
+        /// returns Url Encoded string
+        /// </summary>
+        /// <param name="s">The string to encode, to put in URLs</param>
+        public static string UrlPathEncode(this string s) => s.HasValue() ? Uri.EscapeUriString(s) : s;
 
         /// <summary>
         /// returns Html Encoded string
@@ -332,14 +336,14 @@ namespace StackExchange.Opserver
         {
             var sb = StringBuilderCache.Get();
             var elems = 0;
-            Action<string, int> add = (s, i) =>
+            void add(string s, int i)
+            {
+                if (elems < maxElements && i > 0)
                 {
-                    if (elems < maxElements && i > 0)
-                    {
-                        sb.AppendFormat("{0:0}{1} ", i, s);
-                        elems++;
-                    }
-                };
+                    sb.AppendFormat("{0:0}{1} ", i, s);
+                    elems++;
+                }
+            }
             add("d", span.Days);
             add("h", span.Hours);
             add("m", span.Minutes);
@@ -604,5 +608,7 @@ namespace StackExchange.Opserver
             var value = bytes / Math.Pow(kiloSize, pow);
             return value.ToString(pow == 0 ? "F0" : "F" + precision.ToString()) + " " + Units[(int)pow] + unit;
         }
+
+        internal static StringBuilder Pipend(this StringBuilder sb, string value) => sb.Append("|").Append(value);
     }
 }

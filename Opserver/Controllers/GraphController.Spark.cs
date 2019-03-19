@@ -2,15 +2,17 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Web;
 using System.Web.Mvc;
 using StackExchange.Opserver.Data.Dashboard;
 using StackExchange.Opserver.Data.SQL;
 using StackExchange.Opserver.Helpers;
 using StackExchange.Opserver.Models;
-using StackExchange.Profiling;
 
 namespace StackExchange.Opserver.Controllers
 {
@@ -28,7 +30,6 @@ namespace StackExchange.Opserver.Controllers
         [Route("graph/cpu/spark"), AlsoAllow(Roles.InternalRequest)]
         public async Task<ActionResult> CPUSparkSvg(string id)
         {
-            MiniProfiler.Stop(true);
             var node = DashboardModule.GetNodeById(id);
             if (node == null) return ContentNotFound();
             var points = await node.GetCPUUtilization(SparkStart, null, SparkPoints).ConfigureAwait(false);
@@ -42,8 +43,9 @@ namespace StackExchange.Opserver.Controllers
         [Route("graph/cpu/spark/all"), AlsoAllow(Roles.InternalRequest)]
         public Task<ActionResult> CPUSparkSvgAll()
         {
-            MiniProfiler.Stop(true);
             return SparkSvgAll(
+                "AllCPU",
+                TimeSpan.FromMinutes(2),
                 getPoints: n => n.GetCPUUtilization(SparkStart, null, SparkPoints),
                 getMax: (n, p) => 100,
                 getVal: p => p.Value.GetValueOrDefault());
@@ -53,7 +55,6 @@ namespace StackExchange.Opserver.Controllers
         [Route("graph/memory/spark"), AlsoAllow(Roles.InternalRequest)]
         public async Task<ActionResult> MemorySpark(string id)
         {
-            MiniProfiler.Stop(true);
             var node = DashboardModule.GetNodeById(id);
             if (node?.TotalMemory == null) return ContentNotFound($"Could not determine total memory for '{id}'");
             var points = await node.GetMemoryUtilization(SparkStart, null, SparkPoints).ConfigureAwait(false);
@@ -67,8 +68,9 @@ namespace StackExchange.Opserver.Controllers
         [Route("graph/memory/spark/all"), AlsoAllow(Roles.InternalRequest)]
         public Task<ActionResult> MemorySparkSvgAll()
         {
-            MiniProfiler.Stop(true);
             return SparkSvgAll(
+                "AllMemory",
+                TimeSpan.FromMinutes(2),
                 getPoints: n => n.GetMemoryUtilization(SparkStart, null, SparkPoints),
                 getMax: (n, p) => Convert.ToInt64(n.TotalMemory.GetValueOrDefault()),
                 getVal: p => p.Value.GetValueOrDefault());
@@ -78,7 +80,6 @@ namespace StackExchange.Opserver.Controllers
         [Route("graph/network/spark"), AlsoAllow(Roles.InternalRequest)]
         public async Task<ActionResult> NetworkSpark(string id)
         {
-            MiniProfiler.Stop(true);
             var node = DashboardModule.GetNodeById(id);
             if (node == null) return ContentNotFound();
             var points = await node.GetNetworkUtilization(SparkStart, null, SparkPoints).ConfigureAwait(false);
@@ -92,8 +93,9 @@ namespace StackExchange.Opserver.Controllers
         [Route("graph/network/spark/all"), AlsoAllow(Roles.InternalRequest)]
         public Task<ActionResult> NetworkSparkSvgAll()
         {
-            MiniProfiler.Stop(true);
             return SparkSvgAll(
+                "AllNetwork",
+                TimeSpan.FromMinutes(2),
                 getPoints: n => n.GetNetworkUtilization(SparkStart, null, SparkPoints),
                 getMax: (n, points) => Convert.ToInt64(points.Max(p => p.Value + p.BottomValue).GetValueOrDefault()),
                 getVal: p => (p.Value + p.BottomValue).GetValueOrDefault());
@@ -103,7 +105,6 @@ namespace StackExchange.Opserver.Controllers
         [Route("graph/interface/{direction}/spark"), AlsoAllow(Roles.InternalRequest)]
         public async Task<ActionResult> InterfaceSpark(string direction, string id, string iid)
         {
-            MiniProfiler.Stop(true);
             var iface = DashboardModule.GetNodeById(id)?.GetInterface(iid);
             if (iface == null) return ContentNotFound();
             var points = await iface.GetUtilization(SparkStart, null, SparkPoints).ConfigureAwait(false);
@@ -120,7 +121,6 @@ namespace StackExchange.Opserver.Controllers
         [Route("graph/volumePerformance/spark"), AlsoAllow(Roles.InternalRequest)]
         public async Task<ActionResult> VolumeSpark(string id)
         {
-            MiniProfiler.Stop(true);
             var node = DashboardModule.GetNodeById(id);
             if (node == null) return ContentNotFound();
             var points = await node.GetVolumePerformanceUtilization(SparkStart, null, SparkPoints).ConfigureAwait(false);
@@ -134,7 +134,6 @@ namespace StackExchange.Opserver.Controllers
         [Route("graph/volumePerformance/{direction}/spark"), AlsoAllow(Roles.InternalRequest)]
         public async Task<ActionResult> VolumeSpark(string direction, string id, string iid)
         {
-            MiniProfiler.Stop(true);
             var volume = DashboardModule.GetNodeById(id)?.GetVolume(iid);
             if (volume == null) return ContentNotFound();
             var points = await volume.GetPerformanceUtilization(SparkStart, null, SparkPoints).ConfigureAwait(false);
@@ -151,7 +150,6 @@ namespace StackExchange.Opserver.Controllers
         [Route("graph/sql/cpu/spark")]
         public ActionResult SQLCPUSpark(string node)
         {
-            MiniProfiler.Stop(true);
             var instance = SQLInstance.Get(node);
             if (instance == null) return ContentNotFound($"SQLNode not found with name = '{node}'");
             var start = DateTime.UtcNow.AddHours(-1);
@@ -162,9 +160,17 @@ namespace StackExchange.Opserver.Controllers
             return SparkSVG(points, 100, p => p.ProcessUtilization, start);
         }
 
-        public static async Task<ActionResult> SparkSvgAll<T>(Func<Node, Task<List<T>>> getPoints, Func<Node, List<T>, long> getMax, Func<T, double> getVal) where T : IGraphPoint
+        private async Task<ActionResult> SparkSvgAll<T>(string cacheKey, TimeSpan cacheDuration, Func<Node, Task<List<T>>> getPoints, Func<Node, List<T>, long> getMax, Func<T, double> getVal) where T : IGraphPoint
         {
-            MiniProfiler.Stop(true);
+            Response.Headers.Remove("Content-Encoding");
+            Response.AppendHeader("Content-Encoding", "gzip");
+
+            var cached = Current.LocalCache.Get<byte[]>(cacheKey);
+            if (cached != null)
+            {
+                return new FileContentResult(cached, "image/svg+xml");
+            }
+
             const int width = SparkPoints;
 
             var nodes = DashboardModule.AllNodes;
@@ -228,12 +234,22 @@ namespace StackExchange.Opserver.Controllers
                   .Append(@" z""/>\n")
                   .Append("\t</g>\n");
 
-                currentYTop += SparkHeight;
+                currentYTop += SparkHeight + 1;
             }
 
             sb.Append("</svg>");
             var bytes = Encoding.UTF8.GetBytes(sb.ToStringRecycle());
-            return new FileContentResult(bytes, "image/svg+xml");
+
+            using (var outputStream = new MemoryStream())
+            {
+                using (var gZipStream = new GZipStream(outputStream, CompressionMode.Compress))
+                {
+                    gZipStream.Write(bytes, 0, bytes.Length);
+                }
+                var zippedBytes = outputStream.ToArray();
+                Current.LocalCache.Set(cacheKey, zippedBytes, cacheDuration);
+                return new FileContentResult(zippedBytes, "image/svg+xml");
+            }
         }
 
         private static FileResult SparkSVG<T>(IEnumerable<T> points, long max, Func<T, double> getVal, DateTime? start = null) where T : IGraphPoint

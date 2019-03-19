@@ -23,7 +23,7 @@
     return;
 }
 <h5 class="page-header">
-    <span title="Status: @s.Status.GetDescription()">@s.IconSpan()</span>
+    <span title="Status: @s.Status.AsString(EnumFormat.Description)">@s.IconSpan()</span>
     @s.PrettyName
     @if (s.IsVM)
     {
@@ -49,7 +49,7 @@
             </div>
             <div class="panel-body">
                 <div class="value-block small col-xs-6">
-                    @if (s.Manufacturer.IsNullOrEmpty() && s.IsVM)
+                    @if (s.Manufacturer.IsNullOrEmpty() && s.VMHost != null)
                     {
                         <a href="@Url.Action(nameof(DashboardController.Node), new {node = s.VMHost.PrettyName, view = CurrentStatusTypes.VMHost})">@s.VMHost.PrettyName</a>
                         <label>VM Host</label>
@@ -85,21 +85,21 @@
                 }
             </div>
             <div class="panel-body">
-                <div class="value-block small col-xs-6" title="@s.ApplicationCPUTextSummary()">
+                <div class="value-block small col-xs-6" title="@s.ApplicationCPUTextSummary.Nullify()">
                     <div class="progress">
                         <div class="progress-bar" style="width: @(s.CPULoad?.ToString(CultureInfo.InvariantCulture))%;"></div>
                         <span>@s.CPUStatusSpan()</span>
                     </div>
                     <label>CPU</label>
                 </div>
-                <div class="value-block small col-xs-6" title="@s.ApplicationMemoryTextSummary()">
+                <div class="value-block small col-xs-6" title="@s.ApplicationMemoryTextSummary.Nullify()">
                     <div class="progress">
                         <div class="progress-bar @s.MemoryMonitorStatus().ProgressBarClass()" style="width: @(s.PercentMemoryUsed?.ToString(CultureInfo.InvariantCulture))%;"></div>
                         <span>@s.PrettyMemoryUsed() / @s.PrettyTotalMemory()</span>
                     </div>
                     <label>Memory</label>
                 </div>
-                <div class="value-block small col-xs-6" title="@s.NetworkTextSummary()">
+                <div class="value-block small col-xs-6" title="@s.NetworkTextSummary.Nullify()">
                     @s.PrettyTotalNetwork()
                     <label>
                         Network
@@ -147,7 +147,7 @@
 </div>
 @helper SubnavItem(CurrentStatusTypes st, string url, bool isExternal = true)
 {
-    <li class="@(Model.CurrentStatusType == st ? "active" : "")@(isExternal ? " exit-link" : null)"><a href="@url">@st.GetDescription()</a></li>
+    <li class="@(Model.CurrentStatusType == st ? "active" : "")@(isExternal ? " exit-link" : null)"><a href="@url">@st.AsString(EnumFormat.Description)</a></li>
 }
 @if (Model.StatusTypes.Count() > 1)
 { // only show nav if there's actual nav - save the vertical space on stats-only nodes

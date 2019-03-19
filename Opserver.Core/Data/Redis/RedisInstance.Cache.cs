@@ -23,8 +23,7 @@ namespace StackExchange.Opserver.Data.Redis
             {
                 var parts = connectionString.Split(StringSplits.Colon);
                 if (parts.Length != 2) return null;
-                int port;
-                if (int.TryParse(parts[1], out port)) return Get(parts[0], port);
+                if (int.TryParse(parts[1], out int port)) return Get(parts[0], port);
             }
             else
             {
@@ -37,7 +36,7 @@ namespace StackExchange.Opserver.Data.Redis
         {
             foreach (var ri in RedisModule.Instances)
             {
-                if (ri.Host == host && ri.Port == port) return ri;
+                if (ri.Host.HostName == host && ri.Port == port) return ri;
             }
             var shortHost = host.Split(StringSplits.Period)[0];
             foreach (var ri in RedisModule.Instances)
@@ -62,7 +61,7 @@ namespace StackExchange.Opserver.Data.Redis
 
         public static List<RedisInstance> GetAll(string node)
         {
-            return RedisModule.Instances.Where(ri => string.Equals(ri.Host, node, StringComparison.InvariantCultureIgnoreCase)).ToList();
+            return RedisModule.Instances.Where(ri => string.Equals(ri.Host.HostName, node, StringComparison.InvariantCultureIgnoreCase)).ToList();
         }
     }
 }

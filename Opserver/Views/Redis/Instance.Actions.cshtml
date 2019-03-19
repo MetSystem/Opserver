@@ -1,14 +1,14 @@
 ﻿@using StackExchange.Opserver.Data.Redis
 @model RedisInstance
 @{
-    Layout = null;
     var i = Model;
-    var slaveOptions = i.RecommendedMasterTargets.GroupBy(s => s.Name).ToList();
+    var allSlaveOptions = i.RecommendedMasterTargets.OrderBy(s => s.SlaveCount).ThenBy(s => s.Host.HostName);
+    var slaveOptions = allSlaveOptions.GroupBy(s => s.Name).ToList();
 }
 <h4 class="modal-title">
     Actions for @i.HostAndPort <span class="text-muted">(@i.Name)</span>
 </h4>
-@helper RenderTolopogy(RedisInstance i)
+@helper RenderTolopogy(RedisInstance i, RedisInstance target = null)
 {
     if (i == null)
     {
@@ -17,27 +17,35 @@
     <li>
         @if (i.HostAndPort == Model.HostAndPort)
         {
-            <strong>
-                @i.IconSpan() @i.HostAndPort
-            </strong>
+            <strong>@i.IconSpan() @i.HostAndPort</strong>
+        }
+        else if (target != null && i.HostAndPort == target.HostAndPort)
+        {
+            <span class="text-primary">@i.IconSpan() @i.HostAndPort</span>
         }
         else
         {
             @:@i.IconSpan() @i.HostAndPort
         }
         <span class="text-muted">(@i.Name)</span>
+        @if (target != null && i.HostAndPort == target.HostAndPort)
+        {
+            <ul class="proposed">@RenderTolopogy(Model)</ul>
+        }
         @if (i.SlaveConnections?.Any() ?? false)
         {
             <ul>
                 @foreach (var sc in i.SlaveConnections)
                 {
-                    @RenderTolopogy(sc.GetServer())
+                    var slave = sc.GetServer();
+                    if (target != null && slave.HostAndPort == Model.HostAndPort) { continue; }
+                    @RenderTolopogy(sc.GetServer(), target)
                 }
             </ul>
         }
     </li>
 }
-<div class="js-redis-actions" data-node="@i.HostAndPort">
+<div class="js-redis-actions" data-node="@i.HostAndPort" data-name="@i.Name">
     <div class="row small">
         <div class="col-md-6">
             <div class="panel panel-default">
@@ -52,17 +60,19 @@
                         {
                             <div class="form-group form-group-sm">
                                 <label class="control-label label-inline">Promote to Master <span class="text-muted">(this will deslave the instance)</span></label>
-                                <button class="btn btn-primary btn-xs pull-right js-instance-action" data-action="make-master" data-confirm="'Are you sure you deslave @i.HostAndPort and make it a master?'">Promote / Deslave</button>
+                                <button class="btn btn-success btn-xs pull-right js-instance-action" data-action="make-master-promote" data-confirm="Are you sure you want to promote @i.HostAndPort and set it to the tiebreaker?">Promote</button>
+                                <button class="btn btn-primary btn-xs pull-right js-instance-action" data-action="make-master" data-confirm="Are you sure you want to deslave @i.HostAndPort and make it a standalone master?">Deslave</button>
                             </div>
                         }
                         @if (i.IsMaster)
                         {
+                            var tiebreaker = i.Tiebreaker.Data ?? "not set";
                             <div class="form-group form-group-sm">
                                 <label class="control-label">StackExchange.Redis Tiebreakers</label>
                                 <div class="input-group">
-                                    <input type="text" class="form-control" value="@(i.Tiebreaker.Data ?? "not set")" disabled="disabled"/>
+                                    <input type="text" class="form-control" value="@tiebreaker" disabled="disabled"/>
                                     <span class="input-group-btn">
-                                        @if (i.Tiebreaker.Data == i.HostAndPort)
+                                        @if (tiebreaker.Contains(i.Host.HostName) && tiebreaker.Contains(i.Port.ToString()))
                                         {
                                             <button class="btn btn-sm btn-warning js-instance-action" data-action="clear-tiebreaker">Clear</button>
                                         }
@@ -76,8 +86,24 @@
                         }
                         @if (slaveOptions.Any())
                         {
+                            var optimalSlave = slaveOptions.Where(s => s.Key == i.Name)
+                                                           .SelectMany(s => s)
+                                                           .OrderByDescending(s => s.SlaveCount == 0)
+                                                           .ThenByDescending(s => s.IsSlave)
+                                                           .FirstOrDefault();
                             <div class="form-group form-group-sm">
-                                <div class="input-group">
+                                <label class="control-label">Set Replication Topology</label>
+                                <div class="list-group-sm">
+                                    @foreach (var so in allSlaveOptions)
+                                    {
+                                        <a href="#" class="list-group-item js-redis-new-master" data-action="slave-to" data-new-master="@so.HostAndPort">
+                                            <ul class="ul-tree">
+                                                @RenderTolopogy(so.TopMaster, so)
+                                            </ul>
+                                        </a>
+                                    }
+                                </div>
+                                @*<div class="input-group">
                                     <select name="newMaster" class="form-control js-redis-role-new-master">
                                         <option value="" disabled selected hidden>Choose a master to slave to...</option>
                                         @foreach (var g in slaveOptions)
@@ -85,15 +111,15 @@
                                             <optgroup label="@g.Key">
                                                 @foreach (var s in g)
                                                 {
-                                                    <option value="@s.HostAndPort">@s.HostAndPort</option>
+                                                    <option value="@s.HostAndPort" selected="@(s == optimalSlave ? "selected" : null )">@s.HostAndPort</option>
                                                 }
                                             </optgroup>
                                         }
                                     </select>
                                     <span class="input-group-btn">
-                                        <button class="btn btn-sm btn-primary js-redis-role-slave" data-action="slave-to" disabled="disabled">Slave</button>
+                                        <button class="btn btn-sm btn-primary js-redis-role-slave" data-action="slave-to" disabled="@(optimalSlave != null ? null : "disabled")">Slave</button>
                                     </span>
-                                </div>
+                                </div>*@
                             </div>
                         }
                     </div>

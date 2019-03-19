@@ -55,6 +55,7 @@ namespace StackExchange.Opserver.Data.Dashboard.Providers
                 Caches = new List<Cache>(2);
                 Interfaces = new List<Interface>(2);
                 Volumes = new List<Volume>(3);
+                Services = new List<NodeService>();
                 VMs = new List<Node>();
                 Apps = new List<Application>();
 
@@ -70,34 +71,30 @@ namespace StackExchange.Opserver.Data.Dashboard.Providers
 
             internal List<Interface.InterfaceUtilization> GetInterfaceUtilizationHistory(Interface iface)
             {
-                List<Interface.InterfaceUtilization> result;
                 if (iface != null
                     && Interfaces.Find(x => x == iface) != null
                     && NetHistory.ContainsKey(iface.Name))
                 {
-                    result = NetHistory[iface.Name];
+                    return NetHistory[iface.Name];
                 }
                 else
                 {
-                    result = new List<Interface.InterfaceUtilization>(0);
+                    return new List<Interface.InterfaceUtilization>(0);
                 }
-                return result;
             }
 
             internal List<Volume.VolumePerformanceUtilization> GetVolumePerformanceUtilizationHistory(Volume iface)
             {
-                List<Volume.VolumePerformanceUtilization> result;
                 if (iface != null
                     && Volumes.Find(x => x == iface) != null
                     && VolumePerformanceHistory.ContainsKey(iface.Name))
                 {
-                    result = VolumePerformanceHistory[iface.Name];
+                    return VolumePerformanceHistory[iface.Name];
                 }
                 else
                 {
-                    result = new List<Volume.VolumePerformanceUtilization>(0);
+                    return new List<Volume.VolumePerformanceUtilization>(0);
                 }
-                return result;
             }
 
             private void UpdateHistoryStorage<T>(List<T> data, T newItem) where T : GraphPoint
@@ -138,6 +135,9 @@ namespace StackExchange.Opserver.Data.Dashboard.Providers
         {
             return Task.FromResult(new List<GraphPoint>());
         }
+
+        public Task<ServiceActionResult> UpdateServiceAsync(Node node, string serviceName, NodeService.Action action) =>
+            GetWmiNodeById(node.Id).UpdateServiceAsync(serviceName, action);
 
         public override Task<List<DoubleGraphPoint>> GetPerformanceUtilizationAsync(Volume volume, DateTime? start, DateTime? end, int? pointCount = null) =>
             Task.FromResult(FilterHistory<Volume.VolumePerformanceUtilization, DoubleGraphPoint>(GetWmiNodeById(volume.NodeId)?.GetVolumePerformanceUtilizationHistory(volume), start, end).ToList());

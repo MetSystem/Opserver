@@ -2,13 +2,14 @@
 using StackExchange.Exceptional;
 using StackExchange.Opserver.Helpers;
 using StackExchange.Opserver.Models;
+using System.Threading.Tasks;
 
 namespace StackExchange.Opserver.Controllers
 {
     [OnlyAllow(Roles.GlobalAdmin)]
     public class AdminController : StatusController
     {
-        [Route("admin/purge-security-cache")]
+        [Route("admin/security/purge-cache")]
         public ActionResult Dashboard()
         {
             Current.Security.PurgeCache();
@@ -19,15 +20,6 @@ namespace StackExchange.Opserver.Controllers
         /// Access our error log.
         /// </summary>
         [Route("admin/errors/{resource?}/{subResource?}"), AlsoAllow(Roles.LocalRequest)]
-        public ActionResult InvokeErrorHandler(string resource, string subResource)
-        {
-            var context = System.Web.HttpContext.Current;
-            var factory = new HandlerFactory();
-
-            var page = factory.GetHandler(context, Request.RequestType, Request.Url.ToString(), Request.PathInfo);
-            page.ProcessRequest(context);
-
-            return null;
-        }
+        public Task InvokeErrorHandler() => ExceptionalModule.HandleRequestAsync(System.Web.HttpContext.Current);
     }
 }

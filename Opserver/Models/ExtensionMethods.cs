@@ -6,12 +6,12 @@ using System.Web;
 using System.Web.Mvc;
 using System.Xml;
 using System.Xml.Xsl;
+using EnumsNET;
 using StackExchange.Opserver;
 using StackExchange.Opserver.Data;
 using StackExchange.Opserver.Data.Dashboard;
 using StackExchange.Opserver.Data.SQL;
 using StackExchange.Opserver.Helpers;
-using UnconstrainedMelody;
 
 namespace StackExchange.Opserver.Models
 {
@@ -92,7 +92,7 @@ namespace StackExchange.Opserver.Models
         public static IHtmlString CPUStatusSpan(this Node info)
         {
             if (info == null || info.CPULoad < 0) return MvcHtmlString.Empty;
-            return $@"<span class=""{info.CPUMonitorStatus().GetDescription()}"">{info.CPULoad?.ToString("n0")} %</span>".AsHtml();
+            return $@"<span class=""{info.CPUMonitorStatus().AsString(EnumFormat.Description)}"">{info.CPULoad?.ToString("n0")} %</span>".AsHtml();
         }
 
         public static string PrettyTotalNetwork(this Node info) =>
@@ -104,48 +104,6 @@ namespace StackExchange.Opserver.Models
             info.TotalVolumePerformancebps < 0
                 ? null
                 : info.TotalVolumePerformancebps.ToSpeed();
-
-        public static string NetworkTextSummary(this Node info)
-        {
-            var sb = StringBuilderCache.Get();
-            sb.Append("Total Traffic: ").Append(info.TotalPrimaryNetworkbps.ToSize("b")).AppendLine("/s");
-            sb.AppendFormat("Interfaces ({0} total):", info.Interfaces.Count.ToString()).AppendLine();
-            foreach (var i in info.PrimaryInterfaces.Take(5).OrderByDescending(i => i.InBps + i.OutBps))
-            {
-                sb.AppendFormat("{0}: {1}/s\n(In: {2}/s, Out: {3}/s)\n", i.PrettyName,
-                    (i.InBps.GetValueOrDefault(0) + i.OutBps.GetValueOrDefault(0)).ToSize("b"),
-                    i.InBps.GetValueOrDefault(0).ToSize("b"), i.OutBps.GetValueOrDefault(0).ToSize("b"));
-            }
-            return sb.ToStringRecycle();
-        }
-
-        public static string ApplicationCPUTextSummary(this Node info)
-        {
-            if (info.Apps?.Any() != true) return "";
-
-            var sb = StringBuilderCache.Get();
-            sb.AppendFormat("Total App Pool CPU: {0} %\n", info.Apps.Sum(a => a.PercentCPU.GetValueOrDefault(0)).ToString(CultureInfo.CurrentCulture));
-            sb.AppendLine("App Pools:");
-            foreach (var a in info.Apps.OrderBy(a => a.NiceName))
-            {
-                sb.AppendFormat("  {0}: {1} %\n", a.NiceName, a.PercentCPU?.ToString(CultureInfo.CurrentCulture));
-            }
-            return sb.ToStringRecycle();
-        }
-
-        public static string ApplicationMemoryTextSummary(this Node info)
-        {
-            if (info.Apps?.Any() != true) return "";
-
-            var sb = StringBuilderCache.Get();
-            sb.AppendFormat("Total App Pool Memory: {0}\n", info.Apps.Sum(a => a.MemoryUsed.GetValueOrDefault(0)).ToSize());
-            sb.AppendLine("App Pools:");
-            foreach (var a in info.Apps.OrderBy(a => a.NiceName))
-            {
-                sb.AppendFormat("  {0}: {1}\n", a.NiceName, a.MemoryUsed.GetValueOrDefault(0).ToSize());
-            }
-            return sb.ToStringRecycle();
-        }
     }
 
     public static class SQLExtenstions

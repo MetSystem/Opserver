@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 
 namespace StackExchange.Opserver
 {
-    public class DashboardSettings : Settings<DashboardSettings>, INodeSettings
+    public class DashboardSettings : ModuleSettings, INodeSettings
     {
         public override bool Enabled => Providers.Any();
 
@@ -61,6 +61,22 @@ namespace StackExchange.Opserver
         /// </summary>
         public bool ShowVolumePerformance { get; set; }
 
+        /// <summary>
+        /// The Pattern to match on node services, all services matching this pattern will be shown on the dashboard. 
+        /// </summary>
+        public string ServicesPattern { get; set; }
+
+        private Regex _servicesPatternRegEx;
+        public Regex ServicesPatternRegEx
+        {
+            get { return _servicesPatternRegEx ?? (_servicesPatternRegEx = GetPatternMatcher(ServicesPattern)); }
+            set { _servicesPatternRegEx = value; }
+        }
+
+        protected Regex GetPatternMatcher(string pattern)
+        {
+            return pattern.IsNullOrEmpty() ? null : new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
+        }
         #endregion
 
         /// <summary>
@@ -127,6 +143,18 @@ namespace StackExchange.Opserver
             /// Percent at which disk utilization on a node is marked at a critical level
             /// </summary>
             public decimal? DiskCriticalPercent { get; set; }
+
+            /// <summary>
+            /// The Pattern to match on node services, all services matching this pattern will be shown on the dashboard. 
+            /// </summary>
+            public string ServicesPattern { get; set; }
+
+            private Regex _servicesPatternRegEx;
+            public Regex ServicesPatternRegEx
+            {
+                get { return _servicesPatternRegEx ?? (_servicesPatternRegEx = GetPatternMatcher(ServicesPattern)); }
+                set { _servicesPatternRegEx = value; }
+            }
         }
 
         /// <summary>
@@ -191,6 +219,18 @@ namespace StackExchange.Opserver
             /// Percent at which disk utilization on a node is marked at a critical level
             /// </summary>
             public decimal? DiskCriticalPercent { get; set; }
+
+            /// <summary>
+            /// The Pattern to match on node services, all services matching this pattern will be shown on the dashboard. 
+            /// </summary>
+            public string ServicesPattern { get; set; }
+
+            private Regex _servicesPatternRegEx;
+            public Regex ServicesPatternRegEx
+            {
+                get { return _servicesPatternRegEx ?? (_servicesPatternRegEx = GetPatternMatcher(ServicesPattern)); }
+                set { _servicesPatternRegEx = value; }
+            }
         }
     }
 
@@ -203,5 +243,6 @@ namespace StackExchange.Opserver
         decimal? MemoryCriticalPercent { get; set; }
         decimal? DiskWarningPercent { get; set; }
         decimal? DiskCriticalPercent { get; set; }
+        Regex ServicesPatternRegEx { get; set; }
     }
 }

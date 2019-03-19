@@ -26,7 +26,6 @@ namespace StackExchange.Opserver.Data.SQL
         public class WhoIsActiveRow
         {
             // ReSharper disable InconsistentNaming
-#pragma warning disable IDE1006 // Naming Styles
             public short session_id { get; internal set; }
             public string sql_text { get; internal set; }
             public string sql_command { get; internal set; }
@@ -59,7 +58,6 @@ namespace StackExchange.Opserver.Data.SQL
             public DateTime collection_time { get; internal set; }
 
             public string additional_info { get; internal set; }
-#pragma warning restore IDE1006 // Naming Styles
             // ReSharper restore InconsistentNaming
         }
 
@@ -324,10 +322,15 @@ Exec sp_WhoIsActive
 
             public enum FilterFields
             {
+                [Description("Session")]
                 Session = 0,
+                [Description("Program")]
                 Program = 1,
+                [Description("Database")]
                 Database = 2,
+                [Description("Login")]
                 Login = 3,
+                [Description("Host")]
                 Host = 4
             }
         }

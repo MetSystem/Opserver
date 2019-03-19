@@ -1,12 +1,14 @@
-﻿using System;
+﻿using StackExchange.Exceptional;
+using System;
 using System.Collections.Generic;
-using System.Text.RegularExpressions;
 
 namespace StackExchange.Opserver
 {
-    public class ExceptionsSettings : Settings<ExceptionsSettings>
+    public class ExceptionsSettings : ModuleSettings
     {
         public override bool Enabled => Stores.Count > 0;
+
+        public int PageSize { get; set; } = 500;
 
         public List<Store> Stores { get; set; } = new List<Store>();
 
@@ -15,6 +17,9 @@ namespace StackExchange.Opserver
         public List<string> Applications { get; set; } = new List<string>();
 
         public List<StackTraceSourceLinkPattern> StackTraceReplacements { get; set; } = new List<StackTraceSourceLinkPattern>();
+
+        private StackTraceSettings _stackTraceSettings;
+        public StackTraceSettings StackTraceSettings => _stackTraceSettings ?? (_stackTraceSettings = GetStackTraceSettings());
 
         /// <summary>
         /// How many exceptions before the exceptions are highlighted as a warning in the header, null (default) is ignored
@@ -70,6 +75,26 @@ namespace StackExchange.Opserver
             public string Description { get; set; }
 
             /// <summary>
+            /// The name of the table exceptions are stored in. "Exceptions" is the default.
+            /// </summary>
+            public string TableName { get; set; }
+
+            /// <summary>
+            /// Whether to include this store in the header total
+            /// </summary>
+            public bool IncludeInTotal { get; set; } = true;
+
+            /// <summary>
+            /// Store specific groups, if not specified then the top level groups will be used.
+            /// </summary>
+            public List<ExceptionsGroup> Groups { get; set; }
+
+            /// <summary>
+            /// Store specific applications, if not specified then the top level applications will be used.
+            /// </summary>
+            public List<string> Applications { get; set; }
+
+            /// <summary>
             /// Maximum timeout in milliseconds before giving up on this store
             /// </summary>
             public int? QueryTimeoutMs { get; set; }
@@ -85,6 +110,26 @@ namespace StackExchange.Opserver
             public string ConnectionString { get; set; }
         }
 
+        private StackTraceSettings GetStackTraceSettings()
+        {
+            var result = new StackTraceSettings();
+            foreach (var str in StackTraceReplacements)
+            {
+                if (str.Pattern.HasValue())
+                {
+                    try
+                    {
+                        result.AddReplacement(str.Pattern, str.Replacement);
+                    }
+                    catch (Exception ex)
+                    {
+                        Current.LogException($"Unable to parse source link pattern for '{str.Name}': '{str.Pattern}'", ex);
+                    }
+                }
+            }
+            return result;
+        }
+
         public class StackTraceSourceLinkPattern : ISettingsCollectionItem
         {
             /// <summary>
@@ -94,7 +139,7 @@ namespace StackExchange.Opserver
 
             /// <summary>
             /// A regular expression for detecting links in stack traces.
-            /// Used in conjuction with <see cref="Replacement"/>.
+            /// Used in conjunction with <see cref="Replacement"/>.
             /// </summary>
             public string Pattern { get; set; }
 
@@ -103,33 +148,6 @@ namespace StackExchange.Opserver
             /// matches via <see cref="Regex.Replace(string, string, string)"/>.
             /// </summary>
             public string Replacement { get; set; }
-
-            private static readonly Regex DontMatchAnything = new Regex("(?!)");
-
-            private Regex _regex;
-            public Regex RegexPattern()
-            {
-                if (_regex == null)
-                {
-                    if (Pattern.HasValue())
-                    {
-                        try
-                        {
-                            _regex = new Regex(Pattern, RegexOptions.Compiled | RegexOptions.Multiline | RegexOptions.CultureInvariant);
-                        }
-                        catch (Exception ex)
-                        {
-                            Current.LogException($"Unable to parse source link pattern for '{nameof(Name)}': '{Pattern}'", ex);
-                            _regex = DontMatchAnything;
-                        }
-                    }
-                    else
-                    {
-                        _regex = DontMatchAnything;
-                    }
-                }
-                return _regex;
-            }
         }
     }
 }

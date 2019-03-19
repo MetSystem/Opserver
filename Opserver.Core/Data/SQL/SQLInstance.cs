@@ -14,6 +14,7 @@ namespace StackExchange.Opserver.Data.SQL
     public partial class SQLInstance : PollNode, ISearchableNode
     {
         public string Name => Settings.Name;
+        public virtual string Description => Settings.Description;
         private TimeSpan? _refreshInterval;
         public TimeSpan RefreshInterval => _refreshInterval ?? (_refreshInterval = (Settings.RefreshIntervalSeconds ?? Current.Settings.SQL.RefreshIntervalSeconds).Seconds()).Value;
         public string ObjectName { get; internal set; }
@@ -146,11 +147,10 @@ namespace StackExchange.Opserver.Data.SQL
                 conn => conn.QueryFirstOrDefaultAsync<T>(GetFetchSQL<T>()),
                 Supports<T>,
                 cacheDuration,
+                logExceptions: true,
                 memberName: memberName,
                 sourceFilePath: sourceFilePath,
-                sourceLineNumber: sourceLineNumber,
-                logExceptions: true
-            );
+                sourceLineNumber: sourceLineNumber);
         }
 
         protected Cache<T> GetSqlCache<T>(

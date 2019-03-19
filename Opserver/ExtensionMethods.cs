@@ -10,7 +10,9 @@ using StackExchange.Opserver.Data.Dashboard;
 using StackExchange.Opserver.Data.SQL;
 using StackExchange.Opserver.Helpers;
 using StackExchange.Opserver.Views.Shared;
-using UnconstrainedMelody;
+using System.Text;
+using EnumsNET;
+using System.Web.Routing;
 
 namespace StackExchange.Opserver
 {
@@ -30,6 +32,14 @@ namespace StackExchange.Opserver
         /// </summary>
         /// <param name="s">The string to convert to title case.</param>
         public static string ToTitleCase(this string s) => CultureInfo.CurrentCulture.TextInfo.ToTitleCase(s);
+
+        /// <summary>
+        /// Appends a <see cref="string"/>, HTML encoding the contents first.
+        /// </summary>
+        /// <param name="sb">The <see cref="StringBuilder"/> to append to.</param>
+        /// <param name="s">The <see cref="string"/> to encode and append.</param>
+        /// <returns>The original <see cref="StringBuilder"/> for chaining.</returns>
+        public static StringBuilder AppendHtmlEncode(this StringBuilder sb, string s) => sb.Append(s.HtmlEncode());
 
         /// <summary>
         /// Encodes an object as JSON for direct use without quote crazy
@@ -480,6 +490,19 @@ namespace StackExchange.Opserver
             var result = sb.ToStringRecycle();
             return result.Length > 1 ? result : "";
         }
+
+        public static RouteValueDictionary ToRouteValues(this NameValueCollection queryString)
+        {
+            var routeValues = new RouteValueDictionary();
+            if (queryString?.HasKeys() == true)
+            {
+                foreach (string key in queryString.AllKeys)
+                {
+                    routeValues.Add(key, queryString[key]);
+                }
+            }
+            return routeValues;
+        }
     }
 
     public static class ViewsExtensionMethods
@@ -499,30 +522,33 @@ namespace StackExchange.Opserver
                                         string searchText,
                                         string searchValue = null,
                                         string url = null,
-                                        Dictionary<string, string> addParams = null)
+                                        Dictionary<string, string> addParams = null,
+                                        string queryParam = "q")
         {
             page.ViewData[ViewDataKeys.TopBoxOptions] = new TopBoxOptions
-                {
-                    SearchOnly = true,
-                    SearchText = searchText,
-                    SearchValue = searchValue,
-                    SearchParams = addParams,
-                    Url = url
-                };
+            {
+                SearchOnly = true,
+                SearchText = searchText,
+                SearchValue = searchValue,
+                SearchParams = addParams,
+                QueryParam = queryParam,
+                Url = url
+            };
         }
 
-        public static void SetTopNodes(this WebViewPage page, IEnumerable<ISearchableNode> nodes,
+        public static void SetTopNodes(this WebViewPage page,
+                                       IEnumerable<ISearchableNode> nodes,
                                        string searchText,
                                        ISearchableNode currentNode = null,
                                        string url = null)
         {
             page.ViewData[ViewDataKeys.TopBoxOptions] = new TopBoxOptions
-                {
-                    AllNodes = nodes,
-                    CurrentNode = currentNode,
-                    SearchText = searchText,
-                    Url = url
-                };
+            {
+                AllNodes = nodes,
+                CurrentNode = currentNode,
+                SearchText = searchText,
+                Url = url
+            };
         }
     }
 
@@ -534,19 +560,19 @@ namespace StackExchange.Opserver
             {
                 case SynchronizationStates.Synchronizing:
                 case SynchronizationStates.Synchronized:
-                    return StatusIndicator.UpCustomSpan(state.Value.GetDescription(), tooltip);
+                    return StatusIndicator.UpCustomSpan(state.Value.AsString(EnumFormat.Description), tooltip);
                 case SynchronizationStates.NotSynchronizing:
                 case SynchronizationStates.Reverting:
                 case SynchronizationStates.Initializing:
-                    return StatusIndicator.DownCustomSpan(state.Value.GetDescription(), tooltip);
+                    return StatusIndicator.DownCustomSpan(state.Value.AsString(EnumFormat.Description), tooltip);
                 default:
-                    return StatusIndicator.UnknownCustomSpan(state.Value.GetDescription(), tooltip);
+                    return StatusIndicator.UnknownCustomSpan(state.Value.AsString(EnumFormat.Description), tooltip);
             }
         }
 
         public static IHtmlString ToSpan(this ReplicaRoles? state, string tooltip = null, bool abbreviate = false)
         {
-            var desc = state.HasValue ? state.Value.GetDescription() : "";
+            var desc = state.HasValue ? state.Value.AsString(EnumFormat.Description) : "";
             if (abbreviate) desc = desc.Substring(0, 1);
             switch (state)
             {

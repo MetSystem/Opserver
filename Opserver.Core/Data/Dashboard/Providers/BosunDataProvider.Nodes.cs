@@ -41,7 +41,6 @@ namespace StackExchange.Opserver.Data.Dashboard.Providers
                     if (h.Name == "unspecified")
                         continue;
 
-                    Version kernelVersion;
                     // Note: we can't follow this pattern, we'll need to refresh existing nodes 
                     // not wholesale replace on poll
                     var n = new Node
@@ -54,14 +53,14 @@ namespace StackExchange.Opserver.Data.Dashboard.Providers
                         Status = GetNodeStatus(h),
                         // TODO: Add Last Ping time to all providers
                         LastSync = h.CPU?.StatsLastUpdated,
-                        CPULoad = (short?) h.CPU?.PercentUsed,
+                        CPULoad = (short?)h.CPU?.PercentUsed,
                         MemoryUsed = h.Memory?.UsedBytes,
                         TotalMemory = h.Memory?.TotalBytes,
                         Manufacturer = h.Manufacturer,
                         ServiceTag = h.SerialNumber,
                         MachineType = h.OS?.Caption,
                         MachineOSVersion = h.OS?.Version,
-                        KernelVersion = Version.TryParse(h.OS?.Version, out kernelVersion) ? kernelVersion : null,
+                        KernelVersion = Version.TryParse(h.OS?.Version, out var kernelVersion) ? kernelVersion : null,
 
                         Interfaces = h.Interfaces?.Select(hi => new Interface
                         {
@@ -72,15 +71,11 @@ namespace StackExchange.Opserver.Data.Dashboard.Providers
                             TypeDescription = hi.Value.Type,
                             Caption = hi.Value.Description,
                             PhysicalAddress = hi.Value.MAC,
-                            IPs = hi.Value?.IPAddresses?.Select(ip =>
-                            {
-                                IPNet result;
-                                return IPNet.TryParse(ip, out result) ? result : null;
-                            }).Where(ip => ip != null).ToList() ?? new List<IPNet>(),
+                            IPs = hi.Value?.IPAddresses?.Select(ip => IPNet.TryParse(ip, out var result) ? result : null).Where(ip => ip != null).ToList() ?? new List<IPNet>(),
                             LastSync = hi.Value.StatsLastUpdated,
                             InBps = hi.Value.Inbps,
                             OutBps = hi.Value.Outbps,
-                            Speed = hi.Value.LinkSpeed*1000000,
+                            Speed = hi.Value.LinkSpeed * 1000000,
                             Status = NodeStatus.Active, // TODO: Implement
                             TeamMembers =
                                 h.Interfaces?.Where(i => i.Value.Master == hi.Value.Name).Select(i => i.Key).ToList()
@@ -91,12 +86,12 @@ namespace StackExchange.Opserver.Data.Dashboard.Providers
                             Name = hd.Key,
                             NodeId = h.Name,
                             Caption = hd.Key,
-                            Description = $"{hd.Key}",
+                            Description = hd.Key ?? string.Empty,
                             LastSync = hd.Value.StatsLastUpdated,
                             Used = hd.Value.UsedBytes,
                             Size = hd.Value.TotalBytes,
                             Available = hd.Value.TotalBytes - hd.Value.UsedBytes,
-                            PercentUsed = 100*(hd.Value.UsedBytes/hd.Value.TotalBytes),
+                            PercentUsed = 100 * (hd.Value.UsedBytes / hd.Value.TotalBytes),
                         }).ToList(),
                         //Apps = new List<Application>(),
                         //VMs = new List<Node>()
@@ -224,7 +219,9 @@ namespace StackExchange.Opserver.Data.Dashboard.Providers
                                     Name = ps.Key,
                                     Amps = ps.Value.Amps,
                                     Status = ps.Value.Status,
-                                    Volts = ps.Value.Volts
+                                    Volts = ps.Value.Volts,
+                                    RatedInputWattage = ps.Value.RatedInputWattage,
+                                    RatedOutputWattage = ps.Value.RatedOutputWattage
                                 });
                             }
                         }
@@ -253,6 +250,37 @@ namespace StackExchange.Opserver.Data.Dashboard.Providers
                     if (h.VM != null)
                     {
                         n.VMHostID = h.VM.Host;
+                    }
+
+                    if (h.Processes != null || h.Services != null)
+                    {
+                        n.Apps = new List<Application>();
+                        var appNames = new List<string>();
+                        if (h.Processes != null) appNames.AddRange(h.Processes.Keys);
+                        if (h.Services != null) appNames.AddRange(h.Services.Keys);
+
+                        foreach (var key in appNames.Distinct())
+                        {
+                            var app = new Application
+                            {
+                                AppName = key,
+                                NiceName = key
+                            };
+                            BosunHost.ProcessInfo process = null;
+                            if (h.Processes?.TryGetValue(key, out process) == true)
+                            {
+                                app.PercentCPU = (decimal)process.CPUPercentUsed;
+                                app.CurrentPercentCPU = process.CPUPercentUsed;
+                                app.MemoryUsed = process.UsedRealBytes;
+                                app.VirtualMemoryUsed = process.UsedVirtualBytes;
+                            }
+                            BosunHost.ServiceInfo service = null;
+                            if (h.Services?.TryGetValue(key, out service) == true)
+                            {
+                                app.IsRunning = service.Running;
+                            }
+                            n.Apps.Add(app);
+                        }
                     }
 
                     if (h.UptimeSeconds.HasValue) // TODO: Check if online - maybe against ICMP data last?
@@ -285,7 +313,7 @@ namespace StackExchange.Opserver.Data.Dashboard.Providers
                 case "warning":
                     return MonitorStatus.Warning;
                 default:
-                //case "unknown":
+                    //case "unknown":
                     return MonitorStatus.Unknown;
             }
         }
@@ -294,7 +322,7 @@ namespace StackExchange.Opserver.Data.Dashboard.Providers
         {
             if (host.OpenIncidents?.Count(i => i.Active) > 0)
                 return NodeStatus.Warning;
-            if (host.ICMPData?.Values.All(p => p.TimedOut) == true)
+            if (!Settings.IgnorePing && host.ICMPData?.Values.All(p => p.TimedOut) == true)
                 return NodeStatus.Unreachable;
             return NodeStatus.Active;
         }
@@ -318,6 +346,8 @@ namespace StackExchange.Opserver.Data.Dashboard.Providers
             public List<IncidentInfo> OpenIncidents { get; set; }
             public Dictionary<string, ICMPInfo> ICMPData { get; set; }
             public HardwareInfo Hardware { get; set; }
+            public Dictionary<string, ServiceInfo> Services { get; set; }
+            public Dictionary<string, ProcessInfo> Processes { get; set; }
             public VMInfo VM { get; set; }
 
             public class CPUInfo
@@ -447,6 +477,8 @@ namespace StackExchange.Opserver.Data.Dashboard.Providers
                 {
                     public double Amps { get; set; }
                     public double Volts { get; set; }
+                    public string RatedInputWattage { get; set; }
+                    public string RatedOutputWattage { get; set; }
                 }
 
                 public class BoardPowerInfo
@@ -458,6 +490,19 @@ namespace StackExchange.Opserver.Data.Dashboard.Providers
             public class VMInfo
             {
                 public string Host { get; set; }
+            }
+
+            public class ServiceInfo
+            {
+                public bool Running { get; set; }
+            }
+
+            public class ProcessInfo
+            {
+                public double CPUPercentUsed { get; set; }
+                public long UsedRealBytes { get; set; }
+                public long UsedVirtualBytes { get; set; }
+                public int Count { get; set; }
             }
         }
         // ReSharper restore CollectionNeverUpdated.Local

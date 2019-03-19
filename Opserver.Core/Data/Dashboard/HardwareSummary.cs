@@ -50,8 +50,7 @@ namespace StackExchange.Opserver.Data.Dashboard
                         if (Bank == null) return null;
                         if (Name.Length > Bank.Length)
                         {
-                            int position;
-                            if (int.TryParse(Name.Substring(Bank.Length), out position))
+                            if (int.TryParse(Name.Substring(Bank.Length), out int position))
                             {
                                 _label = position;
                             }
@@ -105,6 +104,8 @@ namespace StackExchange.Opserver.Data.Dashboard
         {
             public double Amps { get; internal set; }
             public double Volts { get; internal set; }
+            public string RatedInputWattage { get; internal set; }
+            public string RatedOutputWattage { get; internal set; }
         }
 
         public class BoardPowerInfo
